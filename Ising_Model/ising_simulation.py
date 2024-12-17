@@ -29,14 +29,20 @@ def ising_model(n, T, nsteps):
         x = np.random.randint(n)
         y = np.random.randint(n)
 
-        if np.sign(np.sum(lattice[x/2:x/2+2,y/2:y/2+2])) == np.sign(original_lattice[x/2,y/2]):
+        if np.sign(np.sum(lattice[x//2:x//2+2,y//2:y//2+2])) == np.sign(original_lattice[x//2,y//2]):
             #do the simulation
 
         elif np.sign(np.sum(lattice[x//2:x//2+2,y//2:y//2+2])) == 0:
             #do 50/50 and do the simulation
+            if np.random.choice([True,False]):
 
-        elif np.sign(np.sum(lattice[x//2:x//2+2,y//2:y//2+2])) != np.sign(original_lattice[x/2,y/2]):
+            else:
+                continue
+            
+
+        elif np.sign(np.sum(lattice[x//2:x//2+2,y//2:y//2+2])) != np.sign(original_lattice[x//2,y//2]):
                 # dont flip
+            continue
             
 
         # Calculate the change in energy

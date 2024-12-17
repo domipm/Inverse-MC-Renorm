@@ -32,10 +32,10 @@ def ising_model(n, T, nsteps):
         if np.sign(np.sum(lattice[x/2:x/2+2,y/2:y/2+2])) == np.sign(original_lattice[x/2,y/2]):
             #do the simulation
 
-        elif np.sign(np.sum(lattice[x/2:x/2+2,y/2:y/2+2])) == 0:
+        elif np.sign(np.sum(lattice[x//2:x//2+2,y//2:y//2+2])) == 0:
             #do 50/50 and do the simulation
 
-        elif np.sign(np.sum(lattice[x/2:x/2+2,y/2:y/2+2])) != np.sign(original_lattice[x/2,y/2]):
+        elif np.sign(np.sum(lattice[x//2:x//2+2,y//2:y//2+2])) != np.sign(original_lattice[x/2,y/2]):
                 # dont flip
             
 

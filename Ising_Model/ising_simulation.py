@@ -29,6 +29,10 @@ def ising_model(n, T, nsteps):
         x = np.random.randint(n)
         y = np.random.randint(n)
 
+        if np.sign(np.sum(lattice[x/2:x/2+2,y/2:y/2+2])) == np.sign(original_lattice[x/2,y/2]):
+
+        elseif:
+
         # Calculate the change in energy
         dE = 2*lattice[x, y]*(lattice[(x+1)%n, y] + lattice[(x-1)%n, y] + lattice[x, (y+1)%n] + lattice[x, (y-1)%n])
 

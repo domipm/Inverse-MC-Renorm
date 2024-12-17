@@ -59,11 +59,18 @@ def ising_model(n, T, nsteps):
             if np.random.choice([True,False]):
                 pass
             else:
+                magnetization[i] = magnetization[i-1]
+                energy[i] = energy[i-1]
+                trajectory[i] = trajectory[i-1]
                 continue
             
 
         elif np.sign(np.sum(lattice[x//2:x//2+2,y//2:y//2+2])) != np.sign(original_lattice[x//2,y//2]):
                 # dont flip
+
+            magnetization[i] = magnetization[i-1]
+            energy[i] = energy[i-1]
+            trajectory[i] = trajectory[i-1]
             continue
             
 

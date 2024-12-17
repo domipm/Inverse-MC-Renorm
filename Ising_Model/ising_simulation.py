@@ -4,11 +4,31 @@ import time
 
 import matplotlib.animation as animation
 
+n= 16	
+
+
+
+def inverse_renornalization(lattice):
+    
+    n, n = lattice.shape 
+    renorm_lattice = np.ones((n*2, n*2))
+
+    for i in range(n):
+        for j in range(n):
+            renorm_lattice[2*i, 2*j] = lattice[i, j]
+            renorm_lattice[2*i+1, 2*j] = lattice[i, j]
+            renorm_lattice[2*i, 2*j+1] = lattice[i, j]
+            renorm_lattice[2*i+1, 2*j+1] = lattice[i, j]
+
+    return renorm_lattice
+
+original_lattice =  2*np.random.randint(2, size=(n//2, n//2))-1
+
 
 def ising_model(n, T, nsteps):
 
     # Initialize the lattice
-    lattice = 2*np.random.randint(2, size=(n, n))-1
+    lattice = inverse_renornalization(original_lattice)
 
     # Initialize variables to store the magnetization and energy
     magnetization = np.zeros(nsteps)
@@ -31,11 +51,13 @@ def ising_model(n, T, nsteps):
 
         if np.sign(np.sum(lattice[x//2:x//2+2,y//2:y//2+2])) == np.sign(original_lattice[x//2,y//2]):
             #do the simulation
+            pass
+
 
         elif np.sign(np.sum(lattice[x//2:x//2+2,y//2:y//2+2])) == 0:
             #do 50/50 and do the simulation
             if np.random.choice([True,False]):
-
+                pass
             else:
                 continue
             
@@ -65,7 +87,7 @@ def ising_model(n, T, nsteps):
 def main(animate = False):
     # Define the parameters of the simulation
     n = 16
-    T = 0.5
+    T = 2.5
     nsteps = 10000
 
     # Perform the simulation
@@ -105,6 +127,12 @@ def main(animate = False):
             ims.append([im])
         ani = animation.ArtistAnimation(fig, ims, interval=1, blit=True, repeat_delay=1000)
         plt.show()
+
+
+
+
+if __name__ == '__main__':
+    main(animate = True)
 
 
 

@@ -21,12 +21,19 @@ class Lattice():
         # Initialize the lattice
         self.lattice = 2 * np.random.randint(2, size = (n_size,) * 2) - 1
 
-        # Keep track of the original lattice
-        self.lattice_org = self.lattice
-        self.n_size_org = n_size
+        # Keep track of the "previous" lattice (to check compatibility)
+        self.lattice_pre = self.lattice
+        self.n_size_pre = n_size
 
-        # Initial size
-        self.n_size_init = 4
+        # Initial, original lattice size (visualization purposes)
+        self.n_size_init = self.n_size
+
+        # Energy and magnetization history
+        self.energy_hist = []
+        self.mag_hist = []
+
+        # Current energy (compute for initial step)
+        self.energy, self.mag = self.comp_em()
 
         return
     
@@ -61,28 +68,19 @@ class Lattice():
         # Disable axes
         ax.axis('off')
         # Write size of lattice
-        ax.text(0,-0.055,s="$n = $" + str(self.n_size), transform = ax.transAxes)
+        ax.text(0, -0.055, s="$n = $" + str(self.n_size), transform = ax.transAxes)
 
         # Show final plot
         plt.savefig("./img/" + str(self.n_size) + "_0.png", dpi=300)
         plt.close()
-        # plt.show()
 
         return
     
-    def montecarlo(self, n_steps, temperature, skip):
+    def montecarlo(self, n_steps, temperature, skip = 1000):
         'Perform Monte-Carlo simulation steps on lattice'
 
-        # Magnetization and energy
-        self.magnetization = np.zeros(n_steps)
-        self.energy = np.zeros((n_steps, self.n_size, self.n_size))
-
-        # Initial magnetization and energy
-        self.magnetization[0] = np.sum(self.lattice)
-        self.energy[0] = -np.sum(self.lattice*np.roll(self.lattice, 1, axis=0) + self.lattice*np.roll(self.lattice, 1, axis=1))
-
         # Define temperature
-        beta = 1/temperature
+        beta = 1.0 / temperature
 
         # Setup plots
         fig, ax = plt.subplots()
@@ -116,60 +114,64 @@ class Lattice():
         # Perform Monte-Carlo steps
         for i in range(1, n_steps):
 
-            # Select a random spin
-            x = np.random.randint(self.n_size)
-            y = np.random.randint(self.n_size)
+            for _ in range(self.n_size ** 2):
 
-            # Flip the spin
-            self.lattice[x,y] *= -1
+                # Select a random spin
+                x = np.random.randint(self.n_size)
+                y = np.random.randint(self.n_size)
 
-            # Check if transformation is compatible
-            if np.sign(np.sum(self.lattice[x//2*2:x//2*2+2, y//2*2:y//2*2+2])) == np.sign(self.lattice_org[x//2, y//2]):
-                # Compatible
-                self.lattice[x,y] *= -1
+                # Propose spin flip
+                self.lattice[x,y] *= -1            
+                # Is this compatible?
+                compatible = True
 
-            elif np.sum(self.lattice[x//2*2:x//2*2+2, y//2*2:y//2*2+2]) == 0:
-                # Randomly choose if compatible or not
-                self.lattice[x,y] *= -1
-                if np.random.choice([True, False]):
+                # Check for compatibility with previous lattice
+
+                # Compute sum of spins from new lattice
+                block_sum = np.sum( self.lattice[x//2*2:x//2*2+2, y//2*2:y//2*2+2] )
+
+                # Case: sum of spins same sign as previous block
+                if np.sign( block_sum ) == np.sign(self.lattice_pre[x//2, y//2]):
+                    # It is compatible
                     pass
+                # Case: sum of spins equals zero
+                elif np.sum( block_sum == 0 ):
+                    # Randomly accept spin flip
+                    compatible = np.random.choice([True, False])
+                # Case: sum of spins different sign as previous block
                 else:
-                    # Update magnetization and energy
-                    self.magnetization[i] = self.magnetization[i-1]
-                    self.energy[i] = self.energy[i-1]
-                    continue
+                    # Not compatible
+                    compatible = False
 
-            elif np.sign(np.sum(self.lattice[x//2*2:x//2*2+2, y//2*2:y//2*2+2])) != np.sign(self.lattice_org[x//2,y//2]):
+                # Revert proposed spin flip back
                 self.lattice[x,y] *= -1
-                # Update magnetization and energy
-                self.magnetization[i] = self.magnetization[i-1]
-                self.energy[i] = self.energy[i-1]
-                continue
 
-            # Calculate the change in energy
-            energy = 2 * self.lattice[x, y] * (self.lattice[(x+1) % self.n_size, y] 
-                       + self.lattice[(x-1) % self.n_size, y] 
-                       + self.lattice[x, (y+1) % self.n_size] 
-                       + self.lattice[x, (y-1) % self.n_size])
+                # Compute the change in energy for single spin flip
+                delta_energy = 2*self.lattice[x, y]*(
+                    self.lattice[(x+1)%self.n_size, y] 
+                    + self.lattice[(x-1)%self.n_size, y] 
+                    + self.lattice[x, (y+1)%self.n_size] 
+                    + self.lattice[x, (y-1)%self.n_size]
+                    )
 
-            # Flip spin (or not)
-            if energy < 0 or np.random.rand() < np.exp(-beta*energy):
-                self.lattice[x,y] *= -1
-                # Update magnetization and energy
-                self.magnetization[i] = self.magnetization[i-1] + 2*self.lattice[x,y]
-                self.energy[i] = self.energy[i-1] + energy
-            else:
-                # Update magnetization and energy
-                self.magnetization[i] = self.magnetization[i-1]
-                self.energy[i] = self.energy[i-1]
-
-            # Skip steps
+                # Consider proposed spin flip, if compatible, flip according to probability
+                if compatible == True:
+                    # Flip spin (accept proposal) if minimizes energy or according to acceptance probability
+                    #if delta_energy < 0 or 
+                    if np.random.rand() < np.min( (1.0, np.exp( - beta * delta_energy )) ):
+                        self.lattice[x,y] *= -1
+                    # Otherwise, don't flip the spin
+                    
+            # Skip steps in visualization
             if i % skip == 0:
                 # Plot matrix
-                mat = ax.matshow(self.lattice, cmap=cmap, interpolation="nearest", vmin=imin, vmax=imax)
+                _ = ax.matshow(self.lattice, cmap=cmap, interpolation="nearest", vmin=imin, vmax=imax)
                 # Save image
                 plt.savefig("./img/" + str(self.n_size) + "_" + str(i) + ".png", dpi=300)
 
+            # At each Monte-Carlo step, compute energy and magnetization
+            self.energy, self.mag = self.comp_em()
+            
         return
     
     def renorm(self):
@@ -183,76 +185,144 @@ class Lattice():
         # Ensure new lattice has same values as old
         for i in range(self.n_size):
             for j in range(self.n_size):
-                # This can be simplified I think
                 lattice_new[2*i, 2*j] = self.lattice[i,j]
                 lattice_new[2*i+1, 2*j] = self.lattice[i,j]
                 lattice_new[2*i, 2*j+1] = self.lattice[i,j]
                 lattice_new[2*i+1, 2*j+1] = self.lattice[i,j]
 
         # Save current lattice as previous
-        self.lattice_org = self.lattice
-        self.n_size_org = self.n_size
-
-        # Set lattice to the new, renormalized lattice
+        self.lattice_pre = self.lattice
+        self.n_size_pre = self.n_size
+        # Set current lattice to the new renormalized lattice
         self.lattice = lattice_new
         self.n_size = n_size_new
 
         return
     
-# Remove old files from folder
-files = glob.glob('./img/*')
-for f in files:
-    os.remove(f)
+    def comp_em(self, J = 1):
+        "Compute energy and magnetization of current state and append to history"
+
+        # Spin-interaction energy
+        energy_spin = 0
+        for i in range(self.n_size):
+            for j in range(self.n_size):
+                # Sum over all nearest neighbors (periodic boundaries)
+                energy_spin += self.lattice[i,j] * (
+                    self.lattice[(i+1)%self.n_size, j] +
+                    + self.lattice[(i-1)%self.n_size, j]
+                    + self.lattice[i, (j+1)%self.n_size] 
+                    + self.lattice[i, (j-1)%self.n_size]
+                )
+
+        # Avoid double-counting and include interaction strength
+        energy = - energy_spin * J / 2
+
+        # Calculate magnetization per spin
+        mag = ( 1.0 / (self.n_size**2) ) * np.sum( self.lattice )
+
+        # Append to corresponding arrays
+        self.energy_hist.append(energy)
+        self.mag_hist.append(mag)
+
+        return energy, mag
+
+# Function to generate *.gif from sequence of images *.png
+def make_gif(filepath_in = "./img/", filepath_out = "./IMCRG.gif", duration = 200, loop = 0):
+
+    # Information
+    print("Generating animation")
+
+    # Filepaths
+    fp_in = filepath_in
+    fp_out = filepath_out
+
+    fnames = np.sort(os.listdir(fp_in))
+
+    # Sorting function that extracts x and y numbers
+    def extract_numbers(filename):
+        match = re.match(r"(\d+)_(\d+)\.png", filename)
+        if match:
+            x, y = int(match[1]), int(match[2])
+            return (x, y)
+        return (float('inf'), float('inf'))  # In case of a non-matching format
+
+    # Sort using numpy's `sorted` function
+    fnames = np.array(sorted(fnames, key=extract_numbers))
+    files = []
+    for i, fname in enumerate(fnames):
+        files.append( str("./img/" + fname) )
+
+    # Use exit stack to automatically close opened images
+    with contextlib.ExitStack() as stack:
+
+        # Lazily load images
+        imgs = (stack.enter_context(Image.open(f))
+                for f in files)
+
+        # Extract  first image from iterator
+        img = next(imgs)
+
+        # https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html#gif
+        img.save(fp=fp_out, format='GIF', append_images=imgs,
+                save_all=True, duration=200, loop=0)
+
+    return
+
+
+
+'''SIMULATION'''
+
+
+
+# Where to save images
+img_path = "./img/"
+# Where to save data
+data_path = "./out/"
+# Where to save animation
+anim_path = "./out/"
+# Remove old images from folder (if there are any)
+try:
+    files = glob.glob(img_path + "*")
+    for f in files:
+        os.remove(f)
+except:
+    pass
 
 # Simulation parameters
-mc_steps = 10000
-temperature = 2.269
-skip = 1000
-size_init = 2 # Initial size will be 2**size_init 
-size_fin = 7 # Final size will be 2**size_fin
+temperature = 2.269     # Approx. critical temperature
+size_init = 2           # Initial size will be 2**size_init 
+size_fin = 9            # Final size will be 2**size_fin
     
+# Generate initial lattice
 lattice = Lattice(n_size = 2**size_init)
+# Plot initial lattice
 lattice.show_lattice()
 
-for _ in range(1, size_fin - 1):
+# At each lattice size, perform 10^L Monte-Carlo iterations
+for n_iter in range(1, size_fin - 1):
 
+    # NaN signals inverse renormalization transformation applied
+    lattice.energy_hist.append(np.nan)
+    lattice.mag_hist.append(np.nan)
+    # Apply inverse renormalization transformation
     lattice.renorm()
+
+    # Iteration information
+    print("Iteration ", n_iter, " Size ", lattice.n_size)
+
+    # Save corresponding image (first after renorm)
     lattice.show_lattice()
-    lattice.montecarlo(mc_steps, temperature, skip)
+    # Perform Monte-Carlo steps
+    lattice.montecarlo(n_steps = 1000, temperature = temperature, skip = 10**10)
 
-# Generate gif from images
 
-# Filepaths
-fp_in = "./img/"
-fp_out = "./IMCRG.gif"
 
-fnames = np.sort(os.listdir(fp_in))
+'''SAVE RESULTS'''
 
-# Sorting function that extracts x and y numbers
-def extract_numbers(filename):
-    match = re.match(r"(\d+)_(\d+)\.png", filename)
-    if match:
-        x, y = int(match[1]), int(match[2])
-        return (x, y)
-    return (float('inf'), float('inf'))  # In case of a non-matching format
 
-# Sort using numpy's `sorted` function
-fnames = np.array(sorted(fnames, key=extract_numbers))
-print(fnames)
-files = []
-for i, fname in enumerate(fnames):
-    files.append( str("./img/" + fname) )
 
-# Use exit stack to automatically close opened images
-with contextlib.ExitStack() as stack:
+# Generate the animation from images (default parameters)
+make_gif(filepath_out = anim_path + "lattice.gif")
 
-    # Lazily load images
-    imgs = (stack.enter_context(Image.open(f))
-            for f in files)
-
-    # Extract  first image from iterator
-    img = next(imgs)
-
-    # https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html#gif
-    img.save(fp=fp_out, format='GIF', append_images=imgs,
-             save_all=True, duration=200, loop=0)
+# Save data to file
+np.save(file = data_path + "data", arr = [lattice.energy_hist, lattice.mag_hist])
